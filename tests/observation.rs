@@ -173,3 +173,64 @@ fn pending_scope_transfer_is_fenced_by_cancel_and_deadline_but_transferred_scope
         .unwrap();
     assert_eq!(queue.len(), 1);
 }
+
+#[test]
+fn completed_observations_keep_complete_storage_charged_until_last_receipt_drop() {
+    let h = Harness::new();
+    let mut config = CredentialConfig::new(5);
+    config.max_operation_bytes = 140_000;
+    let (_owner, handle) = h.build(config);
+    let operation = handle.prepare(input()).unwrap();
+    let baseline = handle.snapshot().retained_bytes;
+    let actual_peer = peer(1);
+    let peer_buffers = actual_peer.endpoint.capacity()
+        + actual_peer.verified_peer.capacity()
+        + actual_peer.channel_binding.capacity()
+        + match &actual_peer.target {
+            Target::Https { origin } => origin.capacity(),
+            _ => unreachable!(),
+        };
+    // Lower bound of actual independently owned public peer payload, terminal
+    // facts, two Arc headers and receipt owner/id/reservation metadata. This
+    // checks the surviving allocation, not the temporary conversation envelope.
+    let minimum = peer_buffers
+        + std::mem::size_of::<PeerContext>()
+        + std::mem::size_of::<TerminalRecord>()
+        + 9 * std::mem::size_of::<usize>();
+    let mut observations = Vec::new();
+    let mut refused = false;
+    for generation in 1..1000 {
+        let opening = operation
+            .context()
+            .select(selection())
+            .unwrap()
+            .begin(peer(generation), AuthControl::new(1000));
+        let observation = match opening.observation() {
+            Some(observation) => observation,
+            None => {
+                assert!(matches!(h.run(opening), Err(AuthError::InputBudget)));
+                refused = true;
+                break;
+            }
+        };
+        let session = h.run(opening).unwrap();
+        drop(h.run(session.finish(PeerAuthResult::Accepted)));
+        h.drive();
+        observations.push(observation);
+        assert_eq!(handle.snapshot().conversations, 0);
+        assert!(handle.snapshot().retained_bytes >= baseline + observations.len() * minimum);
+        assert_eq!(
+            h.retainer.retained_bytes(),
+            handle.snapshot().retained_bytes
+        );
+    }
+    assert!(refused && observations.len() > 2);
+    let last = observations[0].cleanup();
+    drop(observations);
+    assert!(handle.snapshot().retained_bytes >= baseline + minimum);
+    drop(last);
+    assert_eq!(handle.snapshot().retained_bytes, baseline);
+    drop(operation);
+    assert_eq!(handle.snapshot(), Snapshot::default());
+    assert_eq!(h.retainer.retained_bytes(), 0);
+}

@@ -202,7 +202,12 @@ impl PreparedCredential {
             .capacity()
             .checked_add(peer.channel_binding.capacity())
             .and_then(|n| n.checked_add(peer.endpoint.capacity() + peer.target.bytes()))
-            .and_then(|n| n.checked_add(std::mem::size_of::<crate::observation::Observed>() + 64))
+            .and_then(|n| {
+                n.checked_add(std::mem::size_of::<crate::observation::Observed>())
+                    .and_then(|n| n.checked_add(std::mem::size_of::<PeerContext>()))
+                    // Two Arc headers plus alignment/allocation bookkeeping.
+                    .and_then(|n| n.checked_add(128))
+            })
             .ok_or(AuthError::InputBudget)?;
         let observation_reservation = hub.ports.retention.reserve(RetentionCharge {
             bytes: observation_bytes,

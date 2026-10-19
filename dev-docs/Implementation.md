@@ -65,3 +65,14 @@ probe delay, both transfer/cancel orders, oversized equal string/path allocation
 zero-charge providers and Unix non-UTF-8/newline paths. The 10,000-operation test
 now explicitly drops its charged terminal receipt before expecting zero usage.
 No native/provider or adjacent code was changed. Reviewed status still pending.
+
+## Round 2 correction evidence
+
+At edf0d776, State returned GO and Code closed every original finding but found
+P2-5: the new long-lived observation omitted its separately allocated fixed peer
+payload. The correction adds that payload and explicit two-Arc overhead to its
+retained charge. A public-port regression retains completed observations to
+budget refusal, checks owner/shared surviving storage charges and last-clone
+release. No API, lifecycle, dependencies, native or adjacent sources changed.
+All standalone tests, formatter, clippy -D warnings and cargo doc pass. Final
+Code/State closure is pending; cumulative architectural roots remain one.

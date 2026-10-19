@@ -61,6 +61,9 @@ impl TestRetainer {
     pub fn pending(&self) -> usize {
         self.entries.lock().unwrap().len()
     }
+    pub fn retained_bytes(&self) -> usize {
+        self.budget.lock().unwrap().1
+    }
     pub fn reservations(&self) -> usize {
         self.count.load(Ordering::SeqCst)
     }
