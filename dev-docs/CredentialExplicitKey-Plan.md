@@ -66,3 +66,33 @@ is paused pending joint Code/State GO on the WHOLE affected boundary.
 Public hosting and native portable qualification are complete separately; see
 CredentialPlatform-Results.md. This does not fulfill the first-real-provider
 implementation deliverable, which resumes only after the amended boundary passes.
+
+## Read-only SDAX fit note
+
+Operator reference: https://github.com/owebeeone/sdax-rs. Inspected local
+sdax-rs ccf06e76a90e22a454471a71f0cf6f5cb878baac after reading its workspace
+and member AGENTS. No SDAX edits, builds, spike, dependency change or adoption.
+Evidence: docs/Running.md; crates/sdax-tokio/src/running.rs (Future/Drop/output);
+crates/sdax-tokio/src/driver.rs (deadline/blocking dispatch); crate manifests;
+crates/sdax/src/plan.rs and report.rs. This is a source-based fit assessment,
+not executed provider-composition or performance evidence.
+
+SDAX's typed resource/step/service lifecycle, reverse release, custom Running
+Future with cancel/handle/snapshot, tracked drainer, bounded blocking execution
+and simulation/testkit are relevant substrate candidates. They do not themselves
+supply Credential's policy/publication/secret-ownership contract.
+
+| Required Credential property | Read-only fit / outstanding proof |
+| --- | --- |
+| Blocked native read remains charged/owned through actual exit | Running.md says shutdown budget can abandon a blocking node while its native thread continues. A run report therefore cannot free Credential shared capacity, source bytes or native key pins. Any adapter needs actual native-exit/join evidence retained beyond that report; no drop-in equivalence established. |
+| Progress after all caller futures disappear | Running Drop uses one tracked drainer, but current_thread has no progress between block_on calls. A permanently driven runtime/retainer is necessary; merely adopting Running is insufficient. Existing Credential independent bounded periodic progress remains mandatory. |
+| Original absolute deadline | SDAX driver propagates engine deadlines; the bridge would have to map the original clock/deadline without starting fresh durations at run/node/retry boundaries. No such mapping has been implemented/tested. |
+| Unique prepared result and checked publication | Running yields Report<Out> whose output is Arc<Out>; Credential prepared authority is unique, guarded and non-Clone. An internal once-transfer cell could adapt this without copying secret bytes, but must prove only one live prepared capability and no post-cancel transfer. Arc output is not automatically that proof. |
+| Shared limits across owner replacement | Plan/run/blocking bounds are relevant, but Credential needs one shared retention reservation surviving abandoned native work and replacement owners. Rebuilding a Runtime/Plan/provider must not reset that ledger; no bridge proof exists. |
+| Cheap isolated tests | Pure sdax is std-only; executing sdax-tokio adds pinned Tokio1.53.1 and Tokio-util0.7.19. Testkit/simulation could support deterministic faults, but adoption/build-cost effects and provider/kernel/native test separation have not been measured here. |
+
+Conclusion: potentially useful internal lifecycle substrate; no demonstrated
+requirement to adopt it and no claim that its shutdown report means native
+disposal. Its directly awaited custom Future is also a useful API precedent.
+A dependency/adoption spike would require separate authorization. Current
+acquisition Surface review may finish without adding SDAX or a runtime.
