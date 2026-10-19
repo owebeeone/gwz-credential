@@ -1,0 +1,48 @@
+# Portable Credential implementation
+
+Status: portable implementation checkpoint for dual Code/State review;
+not accepted, integrated or released.
+
+Authorized by the operator after the accepted Credential API and boundary
+reviews. Editable: this new member's portable library, tests/docs and GWZ-managed
+registration. All core/CLI/Python/Connection/transport/SSPI source and builder
+closeout lanes are reference-only. No native provider or release is included.
+
+Baseline root before registration: 5de3d3f8dedcb8319435cc27163e2809fdbcd5e5.
+Root authorities: dev-docs/GwzCredentialApiDesign.md (joint review c0fe3cf8)
+and dev-docs/GwzConnectionCredentialBoundary.md (review 0570a27e).
+
+Deliver a standalone Rust library and deterministic fake-provider lifecycle,
+multi-conversation, output-publication, local-key, deadline, capacity and retained
+cleanup proofs. Pin zeroize to the already-used 1.9.0; no dependency upgrades.
+Tests must build without core, Git, Connection, sockets, installed helpers or
+native workers. Runtime/native behavior is not inferred from fake tests.
+
+Stop after portable implementation, focused gates, settled review and report.
+Production adapters, native providers, workspace/Python adoption, placement
+qualification, repository hosting and publication are separate work.
+
+## Checkpoint evidence
+
+2026-10-19: `cargo test --offline`, `cargo fmt --check`, and
+`cargo clippy --offline --all-targets -- -D warnings` pass from this member.
+`cargo tree --offline` contains this package and zeroize 1.9.0 only.
+The suite includes 10,000 sequential operations without retained tombstones,
+500 seeded lifecycle schedules, barrier-controlled native-key cancellation,
+multiple independent conversations, absolute deadlines, bounded admission,
+publication/revocation ordering, connection-scope reuse checks and compile-fail
+owner/secret interface checks. Fake providers supply all authentication material.
+
+The injected retention service must progress independently and poll on a bounded
+cadence even without native wakeups. Tests step it manually. Production scheduling,
+source providers, HTTP offer parsing, SSH algorithms, platform adapters and the
+composition bridge are not implemented; native/platform/placement or real
+connection-reuse qualification is not claimed. The public ports are privileged
+trusted adapter boundaries, not a sandbox against malicious in-process code.
+
+Review: dual Code/State, Surface folded into Code. Exact member commit is recorded
+in review prompts; root controlling documents are pinned at immutable commits,
+not the concurrently advancing builder HEAD. Inspect only this member and those
+authorities; adjacent builder changes are outside the object. File complete
+reports verbatim here. At most two remediation rounds; classify architectural
+roots and stop for operator decision on a third new architectural root.

@@ -1,0 +1,19 @@
+[package]
+name = "gwz-credential"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "GPL-2.0-only"
+description = "Endpoint-local credential conversations with explicit ownership and bounded retention"
+readme = "README.md"
+publish = false
+
+[workspace]
+resolver = "2"
+
+[dependencies]
+zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
