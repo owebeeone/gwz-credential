@@ -137,3 +137,8 @@ Both smallest regressions were observed red before their production correction,
 then pass; see CredentialExplicitKey-RemPlan-1.md. The source/kernel controls
 and retained cleanup remain unchanged. Native correction qualification and
 originating review closure are pending.
+
+Correction1 production/tests29b8838b pass fmt/test/clippy/doc natively on
+MacARM64, WindowsMSVC/E:ReFS and LinuxPi/aarch64 using1.95.0. Source and
+native evidence are settled for originating closure; no implementation GO is
+claimed before both reviewers return their correction verdicts.

@@ -74,3 +74,11 @@ credential-qualification/runs/2026-10-19-explicit-source, with exact commands,
 exit statuses, toolchains, hashes and failed development-attempt limitations.
 This does not prove real SSH cryptography/authentication, production scheduler
 composition, endpoint placement, Connection reuse or CLI/Python integration.
+
+Correction1 source29b8838b9fb3bf60cda58ab259e7d85039a2da88 passes all four
+ordinary gates on the same three native platform/toolchain classes. It closes
+the initial review's provider cutoff and attribution regressions without worker/
+parser/dependency changes. Isolated runtime suffix:credential-source-20261020-29b8838b.
+Private raw commands/results and red-first regressions are in credential-qualification/
+runs/2026-10-20-explicit-source-correction1. Windows booking released after exact
+owner check. The separate originating dual review closure is still pending.
