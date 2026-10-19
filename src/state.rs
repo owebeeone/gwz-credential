@@ -62,7 +62,7 @@ pub(crate) struct Child {
     pub hub: Arc<Hub>,
     pub operation: Arc<Operation>,
     pub id: u64,
-    pub peer: PeerContext,
+    pub peer: Arc<PeerContext>,
     pub control: AuthControl,
     pub scope: SecurityScope,
     pub record_bytes: usize,
@@ -86,6 +86,7 @@ pub(crate) struct ChildState {
     pub outputs: usize,
     pub scopes: usize,
     pub scope_pending: bool,
+    pub scope_transferred: bool,
     pub key_calls: usize,
     pub key_cleanup: Option<Arc<dyn KeyCleanup>>,
     pub external_active: bool,
@@ -149,11 +150,16 @@ impl Hub {
                         state.terminate(Some(reason), PeerAuthResult::Unknown);
                     }
                     if operation.is_none() {
+                        lock(&child.receipt.0.facts).revoked = true;
+                        if state.scope_pending && state.reason.is_none() {
+                            state.reason = Some(AuthError::ProviderClosed);
+                        }
                         state.scope_pending = false;
                     } else if state.scope_pending {
                         state.scope_pending = false;
-                        state.reason = Some(AuthError::OperationClosed);
+                        state.reason.get_or_insert(AuthError::OperationClosed);
                     }
+                    child.publish_terminal(&state);
                     if let Some(waker) = state.waker.take() {
                         wakes.push(waker);
                     }
@@ -178,19 +184,19 @@ impl ChildState {
 }
 impl Child {
     pub fn error(&self, authority: &Authority, state: &ChildState, now: u64) -> Option<AuthError> {
-        if authority.closed {
-            return Some(AuthError::ProviderClosed);
-        }
         if let Some(reason) = state.reason {
             return Some(reason);
+        }
+        if authority.closed {
+            return Some(AuthError::ProviderClosed);
         }
         if lock(&self.operation.state).closed && !state.terminal {
             return Some(AuthError::OperationClosed);
         }
-        if self.control.cancellation.is_cancelled() {
+        if (!state.terminal || state.scope_pending) && self.control.cancellation.is_cancelled() {
             return Some(AuthError::Cancelled);
         }
-        if now >= self.control.deadline_ms {
+        if (!state.terminal || state.scope_pending) && now >= self.control.deadline_ms {
             return Some(AuthError::Timeout);
         }
         None
@@ -200,6 +206,7 @@ impl Child {
             let _authority = lock(&self.hub.state);
             let mut state = lock(&self.inner);
             state.terminate(Some(reason), PeerAuthResult::Unknown);
+            self.publish_terminal(&state);
             state.waker.take()
         };
         if let Some(wake) = wake {
@@ -209,15 +216,40 @@ impl Child {
     }
 }
 
-#[derive(Clone)]
-pub struct CleanupReceipt(pub(crate) Arc<Mutex<CleanupStatus>>);
-impl CleanupReceipt {
-    pub fn status(&self) -> CleanupStatus {
-        *lock(&self.0)
+impl Child {
+    pub fn refresh_pending(&self, authority: &Authority, state: &mut ChildState, now: u64) {
+        if (!state.terminal || state.scope_pending)
+            && let Some(error) = self.error(authority, state, now)
+        {
+            if state.terminal {
+                state.reason.get_or_insert(error);
+                state.scope_pending = false;
+            } else {
+                state.terminate(Some(error), PeerAuthResult::Unknown);
+            }
+        }
+        self.publish_terminal(state);
     }
-}
-impl std::fmt::Debug for CleanupReceipt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.status().fmt(f)
+    pub fn publish_terminal(&self, state: &ChildState) {
+        if state.terminal && !state.scope_pending {
+            let mut facts = lock(&self.receipt.0.facts);
+            if facts.terminal.is_none() {
+                facts.terminal = Some(TerminalRecord {
+                    reason: state.reason,
+                    peer_result: state.peer_result,
+                    publication_committed: state.committed,
+                    disposition: if state.reason.is_some()
+                        || state.peer_result != PeerAuthResult::Accepted
+                        || !state.scope_transferred && self.scope == SecurityScope::Connection
+                    {
+                        PhysicalDisposition::Retire
+                    } else if state.scope_transferred {
+                        PhysicalDisposition::BoundScope
+                    } else {
+                        PhysicalDisposition::RequestSettled
+                    },
+                });
+            }
+        }
     }
 }

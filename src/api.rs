@@ -123,7 +123,11 @@ impl CredentialContext {
             return Err(AuthError::Unsupported);
         }
         let hub = &self.operation.hub;
-        let bytes = hub.provider.selection_charge(&selection)?;
+        let provider_bytes = hub.provider.selection_charge(&selection)?;
+        let bytes = selection
+            .charge()?
+            .checked_add(provider_bytes)
+            .ok_or(AuthError::InputBudget)?;
         let reservation = hub
             .ports
             .retention
@@ -132,7 +136,7 @@ impl CredentialContext {
         // Selection is source admission only: providers must not start native auth here.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let provider = hub.provider.select(&self.operation.input, &selection)?;
-            if provider.retained_bytes() > bytes {
+            if provider.retained_bytes() > provider_bytes {
                 return Err(AuthError::InputBudget);
             }
             Ok(provider)
@@ -193,18 +197,29 @@ impl PreparedCredential {
         {
             return Err(AuthError::Unsupported);
         }
-        let record_bytes = (2 * 65536usize)
-            .checked_add(peer.verified_peer.capacity())
-            .and_then(|n| n.checked_add(peer.channel_binding.capacity()))
-            .and_then(|n| n.checked_add(peer.endpoint.capacity() + peer.target.bytes() + 2048))
-            .and_then(|n| n.checked_add(self.selected.provider.conversation_charge()))
+        let observation_bytes = peer
+            .verified_peer
+            .capacity()
+            .checked_add(peer.channel_binding.capacity())
+            .and_then(|n| n.checked_add(peer.endpoint.capacity() + peer.target.bytes()))
+            .and_then(|n| n.checked_add(std::mem::size_of::<crate::observation::Observed>() + 64))
+            .ok_or(AuthError::InputBudget)?;
+        let observation_reservation = hub.ports.retention.reserve(RetentionCharge {
+            bytes: observation_bytes,
+            records: 0,
+        })?;
+        let record_bytes = (2 * 65536usize + 2048)
+            .checked_add(self.selected.provider.conversation_charge())
             .ok_or(AuthError::InputBudget)?;
         let reservation = hub.ports.retention.reserve(RetentionCharge {
             bytes: record_bytes,
             records: 1,
         })?;
         // Reserve a fixed challenge/output envelope before any provider work.
-        hub.charge(&operation, record_bytes)?;
+        let total_bytes = record_bytes
+            .checked_add(observation_bytes)
+            .ok_or(AuthError::InputBudget)?;
+        hub.charge(&operation, total_bytes)?;
         let registered = {
             let mut authority = lock(&hub.state);
             let valid = hub.check(&authority, &operation);
@@ -214,6 +229,15 @@ impl PreparedCredential {
                 Err(AuthError::Capacity)
             } else if let Some(id) = authority.serial.checked_add(1) {
                 authority.serial = id;
+                let peer = Arc::new(peer);
+                let receipt = CleanupReceipt(Arc::new(crate::observation::Observed {
+                    operation: operation.clone(),
+                    id,
+                    peer: peer.clone(),
+                    bytes: observation_bytes,
+                    _reservation: observation_reservation,
+                    facts: Mutex::default(),
+                }));
                 let child = Arc::new(Child {
                     hub: hub.clone(),
                     operation: operation.clone(),
@@ -223,7 +247,7 @@ impl PreparedCredential {
                     scope,
                     record_bytes,
                     driving: AtomicBool::new(false),
-                    receipt: CleanupReceipt(Arc::new(Mutex::new(CleanupStatus::Pending))),
+                    receipt,
                     inner: Mutex::new(ChildState {
                         selected: Some(self.selected.clone()),
                         provider: None,
@@ -240,6 +264,7 @@ impl PreparedCredential {
                         outputs: 0,
                         scopes: 0,
                         scope_pending: false,
+                        scope_transferred: false,
                         key_calls: 0,
                         key_cleanup: None,
                         external_active: false,
@@ -258,8 +283,8 @@ impl PreparedCredential {
             Ok(child) => child,
             Err(error) => {
                 let mut authority = lock(&hub.state);
-                lock(&operation.state).bytes -= record_bytes;
-                authority.usage.retained_bytes -= record_bytes;
+                lock(&operation.state).bytes -= total_bytes;
+                authority.usage.retained_bytes -= total_bytes;
                 return Err(error);
             }
         };
@@ -269,6 +294,13 @@ impl PreparedCredential {
     }
 }
 impl AuthSession {
+    pub fn observation(&self) -> AuthObservation {
+        self.child
+            .as_ref()
+            .expect("live session")
+            .receipt
+            .observation()
+    }
     pub fn respond(&mut self, challenge: AuthChallenge) -> AuthResponse<'_> {
         let child = self.child.as_ref().expect("live session").clone();
         let now = child.hub.ports.clock.now_ms();
@@ -310,6 +342,7 @@ impl AuthSession {
                     && peer == PeerAuthResult::Accepted
                     && child.scope == SecurityScope::Connection;
             }
+            child.publish_terminal(&state);
         }
         child.hub.ports.progress.wake();
         AuthFinishing {

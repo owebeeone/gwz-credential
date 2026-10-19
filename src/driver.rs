@@ -20,6 +20,9 @@ impl Drop for Driving<'_> {
 }
 
 impl RetainedWork for Child {
+    fn observation(&self) -> AuthObservation {
+        self.receipt.observation()
+    }
     fn advance(&self, cx: &mut Context<'_>) -> Poll<()> {
         if self.driving.swap(true, Ordering::AcqRel) {
             return Poll::Pending;
@@ -29,11 +32,7 @@ impl RetainedWork for Child {
         let work = {
             let authority = lock(&self.hub.state);
             let mut state = lock(&self.inner);
-            if !state.terminal
-                && let Some(error) = self.error(&authority, &state, now)
-            {
-                state.terminate(Some(error), PeerAuthResult::Unknown);
-            }
+            self.refresh_pending(&authority, &mut state, now);
             let work = if state.key_calls != 0 {
                 Work::None
             } else if state.terminal {
@@ -147,8 +146,9 @@ impl RetainedWork for Child {
             let mut authority = lock(&self.hub.state);
             let mut state = lock(&self.inner);
             state.external_active = false;
+            self.publish_terminal(&state);
             if state.cleanup && key_disposed {
-                *lock(&self.receipt.0) = CleanupStatus::Confirmed;
+                lock(&self.receipt.0.facts).cleanup = Some(CleanupStatus::Confirmed);
             }
             let discarded = if state.terminal {
                 state.response.take()

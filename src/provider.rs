@@ -13,6 +13,8 @@ pub trait Progress: Send + Sync {
     fn wake(&self);
 }
 pub trait RetainedWork: Send + Sync {
+    /// Obtain before effects; no cancellation, scope-transfer or release rights.
+    fn observation(&self) -> AuthObservation;
     /// The service must keep polling until Ready, independently of caller futures.
     /// It must schedule bounded periodic polls as well as native/wake notifications:
     /// cancellation flags and absolute deadlines do not depend on a provider wake.

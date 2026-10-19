@@ -72,7 +72,7 @@ impl AuthOutput {
         if state.terminal {
             return Err(AuthError::WrongState);
         }
-        if queue.peer != self.child.peer {
+        if queue.peer != *self.child.peer {
             return Err(AuthError::PeerMismatch);
         }
         if queue.queue.len() >= queue.capacity {
@@ -137,7 +137,7 @@ impl ScopeLease {
         if !context.operation.input.allowed.contains(choice)
             || context.operation.input.endpoint != peer.endpoint
             || self.child.operation.caller != context.operation.caller
-            || peer != self.child.peer
+            || peer != *self.child.peer
         {
             return Err(AuthError::PeerMismatch);
         }
@@ -211,7 +211,7 @@ impl AuthSession {
             {
                 return Err(AuthError::WrongState);
             }
-            if port_peer != child.peer {
+            if port_peer != *child.peer {
                 return Err(AuthError::PeerMismatch);
             }
             if !matches!(child.peer.target, Target::Ssh { .. }) {
@@ -233,14 +233,20 @@ impl AuthSession {
             selected
         };
         let _pin = KeyUse(child.clone());
-        let key = selected
-            .provider
-            .private_key()
-            .ok_or(AuthError::Unsupported)?;
-        // No library state lock is held while native authentication runs.
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| port.authenticate(key)))
-                .unwrap_or(Err(AuthError::ProviderFault));
+        // Key access and native authentication are one uncertain, retained transition.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let key = selected
+                .provider
+                .private_key()
+                .ok_or(AuthError::Unsupported)?;
+            port.authenticate(key)
+        }))
+        .unwrap_or(Err(AuthError::ProviderFault));
+        match result {
+            Err(error) => child.cancel(error),
+            Ok(SshProgress::Rejected) => child.cancel(AuthError::ProviderRejected),
+            _ => {}
+        }
         let now = child.hub.ports.clock.now_ms();
         {
             let authority = lock(&child.hub.state);
@@ -249,9 +255,7 @@ impl AuthSession {
                 return Err(error);
             }
         }
-        if result == Ok(SshProgress::Rejected) {
-            child.cancel(AuthError::ProviderRejected);
-        }
+
         result
     }
 }

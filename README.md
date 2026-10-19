@@ -29,6 +29,16 @@ implementations, offer parsing and SSH cryptography are not supplied by this chu
    cleanup receipt. `session.cancel().await`, operation close and provider close
    revoke their own scope. Dropping an opening/response/session also cancels its
    conversation. Dropping terminal observation never stops retained cleanup.
+The retainer obtains a cloneable `AuthObservation` from `RetainedWork` before
+provider effects; an opening/session can also supply it. It identifies the
+conversation and physical generation, exposes a fixed terminal record and
+matching cleanup receipt, and has no release or scope-transfer authority.
+Dropping finish/cancel observation does not hide the terminal outcome. A potential
+scope transfer remains undecided until transfer, cancellation, deadline or Drop;
+once recorded, terminal facts do not change. Later provider revocation is a
+separate monotonic `revoked()` fact that requires retiring any transferred scope.
+Observation allocations remain charged until their last clone disappears.
+
 6. A permitted connection-bound authentication yields a `ScopeLease`. It grants
    reuse only to matching captured caller/policy/peer/generation, with a fresh
    operation control and checked publication. Basic/helper credentials are not
@@ -44,6 +54,8 @@ requires `KeyCleanup` confirmation before release. No key path is reopened.
 API. Providers must declare retained charges, return promptly from selection and
 polls, and not start native authentication during selection. `start` errors must
 be effect-free; registered native failures return a session that can be closed.
+Explicit-key source paths use native `PathBuf` without UTF-8 conversion. Kernel
+selection metadata is charged separately from declared provider storage.
 Private-key borrows and the local output sink must remain at the executing
 endpoint. In-process malicious code is outside this trust boundary.
 

@@ -71,6 +71,7 @@ fn ten_thousand_operations_retire_records_instead_of_accumulating_tombstones() {
         let session = h.open(&operation, generation);
         let end = h.run(session.finish(PeerAuthResult::Accepted));
         assert_eq!(end.cleanup.status(), CleanupStatus::Confirmed);
+        drop(end);
         drop(operation);
         h.drive();
         assert_eq!(handle.snapshot(), Snapshot::default());

@@ -131,3 +131,64 @@ fn provider_close_during_native_key_call_retains_the_pin_and_revokes_late_succes
     h.drive();
     assert_eq!(handle.snapshot().conversations, 0);
 }
+
+struct FaultPort {
+    inner: KeyPort,
+    panic: bool,
+}
+impl LocalSshKeyPort for FaultPort {
+    fn peer(&self) -> &PeerContext {
+        &self.inner.peer
+    }
+    fn key_cleanup(&self) -> Arc<dyn KeyCleanup> {
+        self.inner.probe.clone()
+    }
+    fn authenticate(&mut self, _: SecretKey<'_>) -> Result<SshProgress, AuthError> {
+        self.inner.seen.push(vec![]);
+        assert!(!self.panic, "synthetic native fault");
+        Err(AuthError::ProviderFault)
+    }
+}
+#[test]
+fn key_errors_and_panics_are_sticky_and_retain_disposal_ownership() {
+    for panic in [false, true] {
+        let h = Harness::new();
+        let (owner, handle) = h.build(CredentialConfig::new(3));
+        let (operation, mut session, actual_peer) = setup(&h, &handle);
+        let observation = session.observation();
+        let probe = Arc::new(Probe(AtomicBool::new(false)));
+        let mut port = FaultPort {
+            inner: KeyPort {
+                peer: actual_peer,
+                probe: probe.clone(),
+                seen: vec![],
+                barrier: None,
+            },
+            panic,
+        };
+        assert_eq!(
+            session.use_ssh_key(&mut port),
+            Err(AuthError::ProviderFault)
+        );
+        assert_eq!(
+            session.use_ssh_key(&mut port),
+            Err(AuthError::ProviderFault)
+        );
+        assert_eq!(port.inner.seen.len(), 1);
+        let terminal = observation.terminal().unwrap();
+        assert_eq!(terminal.reason, Some(AuthError::ProviderFault));
+        assert_eq!(terminal.disposition, PhysicalDisposition::Retire);
+        drop(operation);
+        drop(owner);
+        let end = h.run(session.finish(PeerAuthResult::Accepted));
+        assert_eq!(end.reason, Some(AuthError::ProviderFault));
+        assert_eq!(end.peer_result, PeerAuthResult::Unknown);
+        assert_eq!(observation.terminal(), Some(terminal));
+        assert!(observation.revoked());
+        assert_eq!(handle.snapshot().conversations, 1);
+        probe.0.store(true, Ordering::SeqCst);
+        h.drive();
+        assert_eq!(observation.cleanup().status(), CleanupStatus::Confirmed);
+        assert_eq!(handle.snapshot().conversations, 0);
+    }
+}

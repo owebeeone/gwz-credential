@@ -83,12 +83,22 @@ impl Target {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Source {
-    ExplicitKey(String),
+    ExplicitKey(std::path::PathBuf),
     Agent,
     HttpHelper,
     WindowsLogon,
+}
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::ExplicitKey(_) => "ExplicitKey([redacted])",
+            Self::Agent => "Agent",
+            Self::HttpHelper => "HttpHelper",
+            Self::WindowsLogon => "WindowsLogon",
+        })
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExchangeSelection {
@@ -96,14 +106,25 @@ pub struct ExchangeSelection {
     pub source: Source,
 }
 impl ExchangeSelection {
+    pub(crate) fn charge(&self) -> Result<usize, AuthError> {
+        let path = match &self.source {
+            Source::ExplicitKey(path) => path.capacity(),
+            _ => 0,
+        };
+        self.target
+            .bytes()
+            .checked_add(path)
+            .and_then(|n| n.checked_add(std::mem::size_of::<crate::state::Selected>() + 64))
+            .ok_or(AuthError::InputBudget)
+    }
     pub(crate) fn validate(&self) -> Result<(), AuthError> {
         self.target.validate()?;
         match (&self.target, &self.source) {
             (Target::Ssh { .. }, Source::Agent) => Ok(()),
             (Target::Ssh { .. }, Source::ExplicitKey(path))
-                if !path.is_empty()
-                    && path.len() <= 4096
-                    && !path.chars().any(char::is_control) =>
+                if !path.as_os_str().is_empty()
+                    && path.as_os_str().len() <= 4096
+                    && !path.as_os_str().as_encoded_bytes().contains(&0) =>
             {
                 Ok(())
             }

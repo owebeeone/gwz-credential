@@ -16,6 +16,7 @@
 mod api;
 mod driver;
 mod future;
+mod observation;
 mod output;
 pub mod provider;
 mod state;
@@ -23,6 +24,7 @@ mod values;
 
 pub use api::*;
 pub use future::*;
+pub use observation::*;
 pub use output::*;
 pub use provider::{CredentialPorts, ProviderSet};
 pub use values::*;

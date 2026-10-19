@@ -50,6 +50,14 @@ impl TestRetainer {
             limit,
         }
     }
+    pub fn observations(&self) -> Vec<AuthObservation> {
+        self.entries
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(work, _)| work.observation())
+            .collect()
+    }
     pub fn pending(&self) -> usize {
         self.entries.lock().unwrap().len()
     }
@@ -141,6 +149,7 @@ pub struct FakeProvider {
     pub starts: Arc<AtomicUsize>,
     pub key: Mutex<Vec<u8>>,
     pub panic_response: AtomicBool,
+    pub fail_start: AtomicBool,
 }
 impl FakeProvider {
     pub fn new() -> Self {
@@ -151,6 +160,7 @@ impl FakeProvider {
             starts: Arc::default(),
             key: Mutex::new(b"key-a".to_vec()),
             panic_response: AtomicBool::new(false),
+            fail_start: AtomicBool::new(false),
         }
     }
 }
@@ -162,6 +172,7 @@ struct Selected {
     key: zeroize::Zeroizing<Vec<u8>>,
     scope: SecurityScope,
     panic_response: bool,
+    fail_start: bool,
 }
 impl Provider for FakeProvider {
     fn selection_charge(&self, _: &ExchangeSelection) -> Result<usize, AuthError> {
@@ -184,6 +195,7 @@ impl Provider for FakeProvider {
                 SecurityScope::Request
             },
             panic_response: self.panic_response.load(Ordering::SeqCst),
+            fail_start: self.fail_start.load(Ordering::SeqCst),
         }))
     }
 }
@@ -212,6 +224,7 @@ impl SelectedCredential for Selected {
             respond: self.respond.clone(),
             start: self.start.clone(),
             panic_response: self.panic_response,
+            fail_start: self.fail_start,
         }))
     }
 }
@@ -220,10 +233,13 @@ struct FakeSession {
     respond: Arc<AtomicBool>,
     start: Arc<AtomicBool>,
     panic_response: bool,
+    fail_start: bool,
 }
 impl ProviderSession for FakeSession {
     fn poll_start(&mut self, _: &mut Context<'_>) -> Poll<Result<(), AuthError>> {
-        if self.start.load(Ordering::SeqCst) {
+        if self.fail_start {
+            Poll::Ready(Err(AuthError::ProviderRejected))
+        } else if self.start.load(Ordering::SeqCst) {
             Poll::Ready(Ok(()))
         } else {
             Poll::Pending

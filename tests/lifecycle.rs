@@ -126,3 +126,30 @@ fn provider_panic_does_not_escape_or_fabricate_peer_success() {
     assert_eq!(end.disposition, PhysicalDisposition::Retire);
     assert_eq!(end.cleanup.status(), CleanupStatus::Confirmed);
 }
+
+#[test]
+fn later_owner_shutdown_does_not_mask_a_recorded_provider_failure() {
+    let h = Harness::new();
+    h.provider.panic_response.store(true, Ordering::SeqCst);
+    let (owner, handle) = h.build(CredentialConfig::new(8));
+    let operation = handle.prepare(input()).unwrap();
+    let mut session = h.open(&operation, 3);
+    let observation = session.observation();
+    assert!(matches!(
+        h.respond(&mut session),
+        Err(AuthError::ProviderFault)
+    ));
+    let fixed = observation.terminal().unwrap();
+    drop(operation);
+    drop(owner);
+    assert!(matches!(
+        h.respond(&mut session),
+        Err(AuthError::ProviderFault)
+    ));
+    let end = h.run(session.finish(PeerAuthResult::Accepted));
+    assert_eq!(end.reason, Some(AuthError::ProviderFault));
+    assert_eq!(end.peer_result, PeerAuthResult::Unknown);
+    assert_eq!(end.disposition, PhysicalDisposition::Retire);
+    assert_eq!(observation.terminal(), Some(fixed));
+    assert!(observation.revoked());
+}

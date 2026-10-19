@@ -7,13 +7,14 @@ use std::{
     task::{Context, Poll},
 };
 
-pub use crate::state::CleanupReceipt;
-
 pub struct AuthOpening {
     pub(crate) child: Option<Arc<Child>>,
     pub(crate) error: Option<AuthError>,
 }
 impl AuthOpening {
+    pub fn observation(&self) -> Option<AuthObservation> {
+        self.child.as_ref().map(|child| child.receipt.observation())
+    }
     pub fn wait(self) -> Self {
         self
     }
@@ -146,16 +147,15 @@ impl Future for AuthFinishing {
     type Output = AuthEnd;
     fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<AuthEnd> {
         assert!(!self.completed, "terminal future polled after completion");
+        let now = self.child.hub.ports.clock.now_ms();
         let end = {
             let authority = lock(&self.child.hub.state);
             let mut state = lock(&self.child.inner);
-            let reason = if authority.closed {
-                Some(AuthError::ProviderClosed)
-            } else {
-                state.reason
-            };
+            self.child.refresh_pending(&authority, &mut state, now);
+            let reason = state.reason;
             let scope = if reason.is_none() && state.scope_pending {
                 state.scopes += 1;
+                state.scope_transferred = true;
                 Some(ScopeLease {
                     child: self.child.clone(),
                 })
@@ -163,7 +163,11 @@ impl Future for AuthFinishing {
                 None
             };
             state.scope_pending = false;
-            let disposition = if reason.is_some() || state.peer_result != PeerAuthResult::Accepted {
+            self.child.publish_terminal(&state);
+            let disposition = if authority.closed
+                || reason.is_some()
+                || state.peer_result != PeerAuthResult::Accepted
+            {
                 PhysicalDisposition::Retire
             } else if scope.is_some() {
                 PhysicalDisposition::BoundScope
@@ -187,7 +191,10 @@ impl Future for AuthFinishing {
 impl Drop for AuthFinishing {
     fn drop(&mut self) {
         if !self.completed {
-            lock(&self.child.inner).scope_pending = false;
+            let _authority = lock(&self.child.hub.state);
+            let mut state = lock(&self.child.inner);
+            state.scope_pending = false;
+            self.child.publish_terminal(&state);
         }
         self.child.hub.ports.progress.wake();
     }

@@ -46,3 +46,22 @@ not the concurrently advancing builder HEAD. Inspect only this member and those
 authorities; adjacent builder changes are outside the object. File complete
 reports verbatim here. At most two remediation rounds; classify architectural
 roots and stop for operator decision on a third new architectural root.
+
+## Round 1 correction evidence
+
+Both initial reports are filed verbatim. The two axes independently identified
+the same missing observation boundary (one architectural implementation root),
+plus local transition, accounting and native-path defects. See RemPlan-1 for the
+complete mapping. The member-only patch adds pre-effect charged observation,
+immutable terminal facts with separate monotonic revocation, and the matching
+cleanup receipt. Pending scope transfer is settled against cancellation/deadline;
+errors cannot be replaced by later shutdown. Key failure/panic seals re-entry
+without freeing its native pin. Selection allocation includes kernel capacities
+and structural overhead; native paths remain PathBuf.
+
+Regressions cover each reported sequence through the public ports, including
+observation surviving all ordinary handles, lost finish/cancel futures, native
+probe delay, both transfer/cancel orders, oversized equal string/path allocations,
+zero-charge providers and Unix non-UTF-8/newline paths. The 10,000-operation test
+now explicitly drops its charged terminal receipt before expecting zero usage.
+No native/provider or adjacent code was changed. Reviewed status still pending.
