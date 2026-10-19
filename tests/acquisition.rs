@@ -208,3 +208,82 @@ fn an_unpolled_failed_future_keeps_both_source_choice_and_observation_payload_ch
     drop(observation);
     assert_eq!(handle.snapshot().retained_bytes, baseline);
 }
+
+#[test]
+fn provider_receives_the_earlier_source_or_begin_cutoff_and_cleanup_stays_owned() {
+    use std::sync::atomic::Ordering;
+    for (source, begin) in [(50, 1000), (1000, 50)] {
+        let h = Harness::new();
+        let (_owner, handle) = h.build(CredentialConfig::new(7));
+        let operation = handle.prepare(input()).unwrap();
+        let prepared = h
+            .run(operation.context().acquire(
+                selection(),
+                AcquisitionPurpose::BeforeLookup,
+                AuthControl::new(source),
+            ))
+            .unwrap();
+        let mut session = h
+            .run(prepared.begin(peer(1), AuthControl::new(begin)))
+            .unwrap();
+        assert_eq!(*h.provider.start_deadlines.lock().unwrap(), vec![50]);
+        let observation = session.observation();
+        h.provider.cleanup_ready.store(false, Ordering::SeqCst);
+        h.clock.0.store(50, Ordering::SeqCst);
+        assert!(matches!(h.respond(&mut session), Err(AuthError::Timeout)));
+        drop(session);
+        h.drive();
+        assert_eq!(observation.cleanup().status(), CleanupStatus::Pending);
+        h.provider.cleanup_ready.store(true, Ordering::SeqCst);
+        h.drive();
+        assert_eq!(observation.cleanup().status(), CleanupStatus::Confirmed);
+        drop(observation);
+        drop(operation);
+        h.drive();
+        assert_eq!(handle.snapshot(), Snapshot::default());
+    }
+}
+
+#[test]
+fn retained_source_observations_attribute_the_original_operation_after_caller_loss() {
+    let h = Harness::new();
+    let (_owner, handle) = h.build(CredentialConfig::new(8));
+    let a = handle.prepare(input()).unwrap();
+    let b = handle.prepare(input()).unwrap();
+    let a1 = a.context().acquire(
+        selection(),
+        AcquisitionPurpose::BeforeLookup,
+        AuthControl::new(1000),
+    );
+    let a2 = a.context().acquire(
+        selection(),
+        AcquisitionPurpose::BeforeLookup,
+        AuthControl::new(1000),
+    );
+    let b1 = b.context().acquire(
+        selection(),
+        AcquisitionPurpose::BeforeLookup,
+        AuthControl::new(1000),
+    );
+    let observed = h.retainer.source_observations();
+    let operations: Vec<_> = observed.iter().map(|o| o.operation_id()).collect();
+    let acquisitions: Vec<_> = observed.iter().map(|o| o.id()).collect();
+    assert_eq!(operations[0], operations[1]);
+    assert_ne!(operations[0], operations[2]);
+    assert_ne!(acquisitions[0], acquisitions[1]);
+    assert_ne!(acquisitions[1], acquisitions[2]);
+    drop(a1);
+    drop(a2);
+    drop(b1);
+    drop(a);
+    drop(b);
+    h.drive();
+    for (index, observation) in observed.iter().enumerate() {
+        assert_eq!(observation.operation_id(), operations[index]);
+        assert_eq!(observation.id(), acquisitions[index]);
+        assert_eq!(observation.cleanup().status(), CleanupStatus::Confirmed);
+        assert!(!observation.terminal().unwrap().material_published);
+    }
+    drop(observed);
+    assert_eq!(handle.snapshot(), Snapshot::default());
+}

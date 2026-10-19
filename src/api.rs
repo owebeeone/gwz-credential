@@ -129,9 +129,15 @@ impl PreparedCredential {
             },
         }
     }
-    fn register(self, peer: PeerContext, control: AuthControl) -> Result<Arc<Child>, AuthError> {
+    fn register(
+        self,
+        peer: PeerContext,
+        mut control: AuthControl,
+    ) -> Result<Arc<Child>, AuthError> {
         peer.validate()?;
         if let Some(source) = &self.selected.source {
+            // Native provider work inherits the original request cutoff too.
+            control.deadline_ms = control.deadline_ms.min(source.control.deadline_ms);
             if source.control.cancellation.is_cancelled() {
                 return Err(AuthError::Cancelled);
             }

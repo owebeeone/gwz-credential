@@ -51,6 +51,10 @@ impl AcquisitionObservation {
     pub fn id(&self) -> (u128, u64) {
         (self.0.operation.hub.config.namespace, self.0.id)
     }
+    /// Read-only issuer-qualified attribution, without lifecycle authority.
+    pub fn operation_id(&self) -> (u128, u64) {
+        (self.0.operation.hub.config.namespace, self.0.operation.id)
+    }
     pub fn endpoint(&self) -> &str {
         &self.0.operation.input.endpoint
     }

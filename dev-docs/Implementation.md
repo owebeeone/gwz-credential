@@ -127,3 +127,13 @@ implementation review is pending. Measured candidate delta:17 production/package
 files; approximately2,100 new/modified production lines excluding unit-test
 modules (under2,400 ceiling), under1,800 new/modified test lines including unit
 tests, and zero wire changes. Production and tests remain standalone.
+
+Initial implementation review e4a080b3 returned NO-GO on both axes. They
+independently found the same local P2 (native provider received later begin
+deadline) and P3 (source observation lacked operation attribution), with zero
+architectural roots. Correction1 normalizes the stored/forwarded deadline to
+min(original source, begin) and exposes the existing read-only operation_id.
+Both smallest regressions were observed red before their production correction,
+then pass; see CredentialExplicitKey-RemPlan-1.md. The source/kernel controls
+and retained cleanup remain unchanged. Native correction qualification and
+originating review closure are pending.

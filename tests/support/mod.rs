@@ -50,6 +50,17 @@ impl TestRetainer {
             limit,
         }
     }
+    pub fn source_observations(&self) -> Vec<AcquisitionObservation> {
+        self.entries
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(work, _)| match work.observation() {
+                WorkObservation::Acquisition(observation) => Some(observation),
+                WorkObservation::Authentication(_) => None,
+            })
+            .collect()
+    }
     pub fn observations(&self) -> Vec<AuthObservation> {
         self.entries
             .lock()
@@ -157,6 +168,7 @@ pub struct FakeProvider {
     pub start_ready: Arc<AtomicBool>,
     pub starts: Arc<AtomicUsize>,
     pub acquisitions: AtomicUsize,
+    pub start_deadlines: Arc<Mutex<Vec<u64>>>,
     pub key: Mutex<Vec<u8>>,
     pub panic_response: AtomicBool,
     pub fail_start: AtomicBool,
@@ -171,6 +183,7 @@ impl FakeProvider {
             start_ready: Arc::new(AtomicBool::new(true)),
             starts: Arc::default(),
             acquisitions: AtomicUsize::new(0),
+            start_deadlines: Arc::default(),
             key: Mutex::new(b"key-a".to_vec()),
             panic_response: AtomicBool::new(false),
             fail_start: AtomicBool::new(false),
@@ -183,6 +196,7 @@ struct Selected {
     start: Arc<AtomicBool>,
     starts: Arc<AtomicUsize>,
     key: zeroize::Zeroizing<Vec<u8>>,
+    start_deadlines: Arc<Mutex<Vec<u64>>>,
     scope: SecurityScope,
     panic_response: bool,
     fail_start: bool,
@@ -214,6 +228,7 @@ impl Provider for FakeProvider {
                 respond: self.response_ready.clone(),
                 start: self.start_ready.clone(),
                 starts: self.starts.clone(),
+                start_deadlines: self.start_deadlines.clone(),
                 key: zeroize::Zeroizing::new(self.key.lock().unwrap().clone()),
                 scope: if selection.source == Source::WindowsLogon {
                     SecurityScope::Connection
@@ -275,9 +290,10 @@ impl SelectedCredential for Selected {
     fn start(
         &self,
         _: &PeerContext,
-        _: u64,
+        deadline: u64,
         _: Cancellation,
     ) -> Result<Box<dyn ProviderSession>, AuthError> {
+        self.start_deadlines.lock().unwrap().push(deadline);
         self.starts.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(FakeSession {
             cleanup: self.cleanup.clone(),
