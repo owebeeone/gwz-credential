@@ -45,3 +45,32 @@ reuse and CLI/Python qualification. The operator subsequently authorized an
 acquisition-boundary redesign; its joint DRAFT is root
 `dev-docs/GwzCredentialAcquisitionAmendment.md` at c9640db2. Production changes
 remain paused until that revised joint boundary passes review.
+
+## First real explicit-file source candidate
+
+Source3e995edd53d315f639cbfe167fd4562778ee42b9 passes the same four gates
+on all three native platforms, explicitly pinned +1.95.0: fmt --check; test
+--offline --locked; clippy --offline --locked --all-targets -- -D warnings;
+doc --offline --locked --no-deps. This includes the migrated portable suite
+and new acquisition/file/native-worker regressions. It is implementation
+qualification evidence, pending separate dual settled source review.
+
+| Platform | Isolated source/target location | Result |
+| --- | --- | --- |
+| Mac aarch64-apple-darwin | member source; external build-targets/credential-source-20261019-3e995edd | PASS all gates |
+| Windows x86_64-pc-windows-msvc | E:/gwz-tests/credential-source-20261019-3e995edd/src; E:Healthy/ReFS | PASS all gates |
+| Linux weftpi aarch64 | /mnt/work/git/credential-source-20261019-3e995edd/src | PASS all gates |
+
+Both remote checkouts came from the sealed committed source bundle and printed
+the exact HEAD before execution. Windows shared booking was atomically acquired
+and ownership-checked before release. No broad GWZ build or host security/agent
+change. Linux executed actual nonUTF8/newline paths and FIFO replacement; APFS
+refused nonUTF8 creation, and its explicit test branch verifies native refusal
+without lossy-name fallback. Native container/device policy tables run on every
+platform; the Windows native CNG refusal is also exercised by source tests.
+
+Private raw evidence (access required): gwz-core-evidence campaign
+credential-qualification/runs/2026-10-19-explicit-source, with exact commands,
+exit statuses, toolchains, hashes and failed development-attempt limitations.
+This does not prove real SSH cryptography/authentication, production scheduler
+composition, endpoint placement, Connection reuse or CLI/Python integration.

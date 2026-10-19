@@ -120,3 +120,10 @@ file/container refusal cases. Tests use temporary synthetic source data and fake
 native authentication ports. Native SSH authentication and Connection placement/
 reuse remain unimplemented separate gates. New source acceptance and native
 results will be recorded at the settled implementation gate.
+
+The settled production candidate is3e995edd. Native Mac/Windows/Linux gates
+all pass; see CredentialPlatform-Results.md. Its separate Code+Surface/State
+implementation review is pending. Measured candidate delta:17 production/package
+files; approximately2,100 new/modified production lines excluding unit-test
+modules (under2,400 ceiling), under1,800 new/modified test lines including unit
+tests, and zero wire changes. Production and tests remain standalone.
