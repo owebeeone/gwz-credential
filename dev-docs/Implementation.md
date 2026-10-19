@@ -1,7 +1,11 @@
 # Portable Credential implementation
 
-Status: portable implementation checkpoint for dual Code/State review;
-not accepted, integrated or released.
+Status: **accepted portable implementation at
+`d6fc64d6a38457018377020765229405920a4833` after
+[Code](CredentialPortable-ReviewCode-2.md) and
+[State](CredentialPortable-ReviewState-2.md) both reported GO.**
+This accepts the isolated portable kernel only; it is not integrated or released.
+See [merged verdict](CredentialPortable-Verdict.md).
 
 Authorized by the operator after the accepted Credential API and boundary
 reviews. Editable: this new member's portable library, tests/docs and GWZ-managed
@@ -64,7 +68,7 @@ observation surviving all ordinary handles, lost finish/cancel futures, native
 probe delay, both transfer/cancel orders, oversized equal string/path allocations,
 zero-charge providers and Unix non-UTF-8/newline paths. The 10,000-operation test
 now explicitly drops its charged terminal receipt before expecting zero usage.
-No native/provider or adjacent code was changed. Reviewed status still pending.
+No native/provider or adjacent code was changed. Round-1 status was pending; final acceptance is recorded above.
 
 ## Round 2 correction evidence
 
@@ -75,4 +79,19 @@ retained charge. A public-port regression retains completed observations to
 budget refusal, checks owner/shared surviving storage charges and last-clone
 release. No API, lifecycle, dependencies, native or adjacent sources changed.
 All standalone tests, formatter, clippy -D warnings and cargo doc pass. Final
-Code/State closure is pending; cumulative architectural roots remain one.
+Code/State closure is GO/GO at the accepted tuple above; architectural roots
+remain one, closed.
+
+## Resume boundary
+
+The isolated portable chunk is finished. Stop here: no further work on core,
+Connection, Python, native providers or builder closeout is authorized by this
+checkpoint. Next provider work must separately select which existing provider
+semantics to implement and its focused qualification; composition needs its own
+small bridge proof. Do not report the full Credential system, transport release,
+credential placement or persistent connection reuse as complete from these fakes.
+The retainer/progress implementation remains an explicit composition obligation.
+
+Intermediate prompts, superseded reviews and correction plans have moved into
+history unchanged at this stable checkpoint. Their historical references are
+unchanged. The accepted design authorities remain in root at 0de87d56.
