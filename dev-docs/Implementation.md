@@ -1,5 +1,10 @@
 # Credential implementation checkpoints
 
+Current status: **accepted first explicit-file source/library implementation**,
+production/tests29b8838b9fb3bf60cda58ab259e7d85039a2da88, after dual GO at
+member0d01d6af. See [current merged verdict](CredentialExplicitKey-Verdict.md)
+and native platform results. The historical portable checkpoint follows.
+
 Status: **accepted portable implementation at
 `d6fc64d6a38457018377020765229405920a4833` after
 [Code](CredentialPortable-ReviewCode-2.md) and

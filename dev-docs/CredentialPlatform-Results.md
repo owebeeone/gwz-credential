@@ -82,3 +82,7 @@ parser/dependency changes. Isolated runtime suffix:credential-source-20261020-29
 Private raw commands/results and red-first regressions are in credential-qualification/
 runs/2026-10-20-explicit-source-correction1. Windows booking released after exact
 owner check. The separate originating dual review closure is still pending.
+
+Final dual implementation closure: Code+Surface GO and State GO at member0d01d6af,
+accepting production29b8838b and these source/library gates. See
+CredentialExplicitKey-Verdict.md for exact scope and remaining integration work.

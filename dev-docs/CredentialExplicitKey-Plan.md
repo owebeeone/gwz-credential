@@ -1,6 +1,6 @@
 # First explicit-key provider and native qualification
 
-Date: 2026-10-19. Status: first real source implemented; native qualification and implementation review pending.
+Date: 2026-10-19. Status: completed and accepted; see CredentialExplicitKey-Verdict.md.
 
 Operator authorization: create public `owebeeone/gwz-credential`, qualify the
 standalone library on Mac, Windows and Linux, and implement the first actual
@@ -143,3 +143,11 @@ The Unix filename fixture initially assumed APFS could create arbitrary non-UTF8
 names. APFS returned EILSEQ. The corrected Mac branch verifies native refusal
 and no lossy-name fallback; Linux must exercise actual non-UTF8 creation/read.
 This is a fixture assumption correction, not a key-path conversion in production.
+
+## Completed boundary
+
+Both originating implementation reviewers returned GO at0d01d6af, accepting
+production29b8838b and all three native source/library gates. One local correction
+closed independently convergent deadline-forwarding/observation-attribution
+findings. See final merged verdict for exact tuple, review ledger, limitations
+and next separate integration handoff. No automatic continuation is authorized.
