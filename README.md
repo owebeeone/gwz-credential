@@ -1,7 +1,9 @@
 # gwz-credential
 
 Portable implementation of the reviewed GWZ Credential API and the
-Connection–Credential boundary. This local member is unpublished.
+Connection–Credential boundary. The source is public at
+[owebeeone/gwz-credential](https://github.com/owebeeone/gwz-credential);
+the crate is not published to a package registry.
 
 Scope: explicit provider/operation/conversation ownership, bounded accounting,
 deadline/cancellation, endpoint-local response capabilities and retained cleanup.
@@ -93,3 +95,9 @@ failure; set `GWZ_CREDENTIAL_SEED` (hex) and `GWZ_CREDENTIAL_CASES` to replay.
 See [implementation status](dev-docs/Implementation.md). Passing portable tests
 does not qualify native authentication, endpoint placement or connection reuse
 through CLI/Python. No release or publishing is authorized by this implementation.
+
+The first real explicit-file provider is paused at the
+[source-admission contract question](dev-docs/CredentialExplicitKey-AdmissionQuestion.md).
+The controlled-stall regression demonstrates the limit of reading inline during
+selection; it is not a production source provider. See the
+[current bounded task](dev-docs/CredentialExplicitKey-Plan.md).

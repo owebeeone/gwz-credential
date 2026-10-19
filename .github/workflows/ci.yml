@@ -1,0 +1,27 @@
+name: Standalone credential gates
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  standalone:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - name: Fetch locked dependency
+        run: cargo fetch --locked
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Standalone tests
+        run: cargo test --offline --locked
+      - name: Lints
+        run: cargo clippy --offline --locked --all-targets -- -D warnings
+      - name: Public documentation
+        run: cargo doc --offline --locked --no-deps
