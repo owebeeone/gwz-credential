@@ -14,7 +14,7 @@ pub trait Progress: Send + Sync {
 }
 pub trait RetainedWork: Send + Sync {
     /// Obtain before effects; no cancellation, scope-transfer or release rights.
-    fn observation(&self) -> AuthObservation;
+    fn observation(&self) -> WorkObservation;
     /// The service must keep polling until Ready, independently of caller futures.
     /// It must schedule bounded periodic polls as well as native/wake notifications:
     /// cancellation flags and absolute deadlines do not depend on a provider wake.
@@ -40,17 +40,45 @@ pub struct CredentialPorts {
     pub retention: Arc<dyn RetentionPort>,
 }
 pub struct ProviderSet(pub Arc<dyn Provider>);
+#[derive(Clone)]
+pub enum WorkObservation {
+    Acquisition(AcquisitionObservation),
+    Authentication(AuthObservation),
+}
+#[derive(Clone, Copy)]
+pub struct AcquisitionCharge {
+    pub snapshot_bytes: usize,
+    pub work_bytes: usize,
+}
 pub trait Provider: Send + Sync {
-    /// Declared maximum selection allocation, reserved before selecting.
-    fn selection_charge(&self, selection: &ExchangeSelection) -> Result<usize, AuthError>;
-    /// May read the selected endpoint-local source; must not start authentication.
-    fn select(
+    /// Pure upper bound; reserve BEFORE any source access or worker allocation.
+    fn acquisition_charge(
+        &self,
+        selection: &ExchangeSelection,
+        purpose: &AcquisitionPurpose,
+    ) -> Result<AcquisitionCharge, AuthError>;
+    /// Called only from registered retained work, outside authority locks.
+    /// Err is effect-free; registered native failures belong in the session.
+    fn start_acquire(
         &self,
         input: &CredentialInput,
         selection: &ExchangeSelection,
-    ) -> Result<Arc<dyn SelectedCredential>, AuthError>;
+        purpose: &AcquisitionPurpose,
+        control: SourceControl,
+    ) -> Result<Box<dyn ProviderAcquisition>, AuthError>;
 }
-pub trait SelectedCredential: Send + Sync {
+pub trait ProviderAcquisition: Send {
+    fn poll_acquire(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<Arc<dyn SelectedCredential>, AuthError>>;
+    /// Ready confirms actual source-job disposal, never just cancellation.
+    fn poll_close(&mut self, cx: &mut Context<'_>, cancelled: bool) -> Poll<Result<(), AuthError>>;
+}
+pub trait SelectedCredential: std::any::Any + Send + Sync {
+    fn as_any(&self) -> &dyn std::any::Any;
+    /// Full admitted material equality, not a path or identifier hint.
+    fn same_material(&self, other: &dyn SelectedCredential) -> bool;
     fn retained_bytes(&self) -> usize;
     fn conversation_charge(&self) -> usize;
     fn scope(&self) -> SecurityScope;

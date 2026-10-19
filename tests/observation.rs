@@ -11,9 +11,8 @@ fn fake_bridge_observes_lost_and_failed_openings_without_caller_progress() {
         h.provider.cleanup_ready.store(false, Ordering::SeqCst);
         let (owner, handle) = h.build(CredentialConfig::new(45));
         let operation = handle.prepare(input()).unwrap();
-        let opening = operation
-            .context()
-            .select(selection())
+        let opening = h
+            .acquire(&operation, selection())
             .unwrap()
             .begin(peer(40), AuthControl::new(1000));
         // The composition retainer obtains this through the public work port,
@@ -67,18 +66,14 @@ fn lost_finish_or_cancel_reports_preserve_generation_and_accepted_fact() {
     let operation = handle.prepare(native_input()).unwrap();
     let first = h
         .run(
-            operation
-                .context()
-                .select(native_input().allowed.remove(0))
+            h.acquire(&operation, native_input().allowed.remove(0))
                 .unwrap()
                 .begin(peer(1), AuthControl::new(1000)),
         )
         .unwrap();
     let second = h
         .run(
-            operation
-                .context()
-                .select(native_input().allowed.remove(0))
+            h.acquire(&operation, native_input().allowed.remove(0))
                 .unwrap()
                 .begin(peer(2), AuthControl::new(1000)),
         )
@@ -118,9 +113,7 @@ fn pending_scope_transfer_is_fenced_by_cancel_and_deadline_but_transferred_scope
         let cancel = control.cancellation.clone();
         let session = h
             .run(
-                operation
-                    .context()
-                    .select(native_input().allowed.remove(0))
+                h.acquire(&operation, native_input().allowed.remove(0))
                     .unwrap()
                     .begin(peer(1), control),
             )
@@ -153,9 +146,7 @@ fn pending_scope_transfer_is_fenced_by_cancel_and_deadline_but_transferred_scope
     let cancel = control.cancellation.clone();
     let session = h
         .run(
-            operation
-                .context()
-                .select(native_input().allowed.remove(0))
+            h.acquire(&operation, native_input().allowed.remove(0))
                 .unwrap()
                 .begin(peer(1), control),
         )
@@ -200,9 +191,8 @@ fn completed_observations_keep_complete_storage_charged_until_last_receipt_drop(
     let mut observations = Vec::new();
     let mut refused = false;
     for generation in 1..1000 {
-        let opening = operation
-            .context()
-            .select(selection())
+        let opening = h
+            .acquire(&operation, selection())
             .unwrap()
             .begin(peer(generation), AuthControl::new(1000));
         let observation = match opening.observation() {

@@ -31,9 +31,8 @@ fn seeded_publication_cancellation_and_cleanup_schedules_replay() {
             let (owner, handle) = h.build(CredentialConfig::new(case as u128));
             let operation = handle.prepare(input()).unwrap();
             if schedule & 1 == 0 {
-                let opening = operation
-                    .context()
-                    .select(selection())
+                let opening = h
+                    .acquire(&operation, selection())
                     .unwrap()
                     .begin(peer(1), AuthControl::new(1000));
                 if schedule & 2 != 0 {

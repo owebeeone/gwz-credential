@@ -1,6 +1,6 @@
 # First explicit-key provider and native qualification
 
-Date: 2026-10-19. Status: feasibility investigation; no provider acceptance.
+Date: 2026-10-19. Status: first real source implemented; native qualification and implementation review pending.
 
 Operator authorization: create public `owebeeone/gwz-credential`, qualify the
 standalone library on Mac, Windows and Linux, and implement the first actual
@@ -96,3 +96,50 @@ requirement to adopt it and no claim that its shutdown report means native
 disposal. Its directly awaited custom Future is also a useful API precedent.
 A dependency/adoption spike would require separate authorization. Current
 acquisition Surface review may finish without adding SDAX or a runtime.
+
+## Accepted redesign and implementation resumption
+
+Revision2 of root GwzCredentialAcquisitionAmendment.md is accepted GO/GO at
+5dd59da1 after two bounded corrections, with zero architectural roots and no
+open P0–P3. See CredentialAcquisition-Verdict.md and the final verbatim reports.
+The original provider stop is superseded by this operator-authorized design.
+
+Resume this member's acquisition API and first explicit-file provider only.
+The implementation budget is revised for the operator's complete boundary
+redesign: 2,400 new/modified production lines, 1,800 test/CI lines, 22 product
+files, zero wire changes. The earlier 1,000-line ceiling described the initially
+assumed provider-only path; it is not an operator requirement to preserve the
+underspecified API. Existing lifecycle mechanisms may be reused where correct;
+no new general supervisor/runtime is introduced. The first parser will reuse
+core's bounded container-validation algorithm and exact already-used
+base64=0.22.1 rather than invent another decoder; this is one focused production
+dependency addition with no version upgrade. Zeroize remains pinned=1.9.0.
+
+Work test-first against the declared directly awaited Future, source-specific
+terminal observation, native worker join and exact snapshot identity. Keep native
+file acquisition tests distinct from fake kernel tests and actual SSH auth.
+Settle/review the implemented boundary and rerun focused native gates before
+claiming provider completion. Application integration and SDAX adoption remain
+outside scope. Archive closed intermediate design reviews/prompts/plans unchanged
+at the provider checkpoint; final design provenance stays active.
+
+## Implementation candidate
+
+The direct acquisition Future and first explicit-file source are implemented
+against accepted root5dd59da1. The original failing acquisition and file-provider
+compile probes were observed before their production interfaces existed. Existing
+portable tests were migrated without deleting the10k-operation/500-schedule
+coverage. Source failure reports contain finite sanitized variants, never paths
+or key bytes. One fixed2MiB native stack is explicitly charged in each source
+work reservation; no owner replacement resets the shared ledger.
+
+Pinned Rust1.95.0 Mac test/fmt/clippy/doc and the disabled-branch cfg boundary
+guard pass locally. Actual blocked native work, worker panic/join, stored-result
+versus exit and clock callbacks outside kernel locks have focused regressions.
+Native new-source Windows/Linux and settled dual implementation review remain
+pending; the earlier platform results qualify only the older portable commit.
+
+The Unix filename fixture initially assumed APFS could create arbitrary non-UTF8
+names. APFS returned EILSEQ. The corrected Mac branch verifies native refusal
+and no lossy-name fallback; Linux must exercise actual non-UTF8 creation/read.
+This is a fixture assumption correction, not a key-path conversion in production.

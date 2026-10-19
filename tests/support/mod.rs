@@ -55,7 +55,10 @@ impl TestRetainer {
             .lock()
             .unwrap()
             .iter()
-            .map(|(work, _)| work.observation())
+            .filter_map(|(work, _)| match work.observation() {
+                WorkObservation::Authentication(observation) => Some(observation),
+                WorkObservation::Acquisition(_) => None,
+            })
             .collect()
     }
     pub fn pending(&self) -> usize {
@@ -133,6 +136,7 @@ pub fn input() -> CredentialInput {
     CredentialInput {
         endpoint: "endpoint-1".into(),
         caller: Arc::new(Caller(7)),
+        native_base: None,
         allowed: vec![selection()],
     }
 }
@@ -147,9 +151,12 @@ pub fn peer(generation: u64) -> PeerContext {
 }
 pub struct FakeProvider {
     pub cleanup_ready: Arc<AtomicBool>,
+    pub acquisition_ready: Arc<AtomicBool>,
+    pub acquisition_cleanup_ready: Arc<AtomicBool>,
     pub response_ready: Arc<AtomicBool>,
     pub start_ready: Arc<AtomicBool>,
     pub starts: Arc<AtomicUsize>,
+    pub acquisitions: AtomicUsize,
     pub key: Mutex<Vec<u8>>,
     pub panic_response: AtomicBool,
     pub fail_start: AtomicBool,
@@ -158,9 +165,12 @@ impl FakeProvider {
     pub fn new() -> Self {
         Self {
             cleanup_ready: Arc::new(AtomicBool::new(true)),
+            acquisition_ready: Arc::new(AtomicBool::new(true)),
+            acquisition_cleanup_ready: Arc::new(AtomicBool::new(true)),
             response_ready: Arc::new(AtomicBool::new(true)),
             start_ready: Arc::new(AtomicBool::new(true)),
             starts: Arc::default(),
+            acquisitions: AtomicUsize::new(0),
             key: Mutex::new(b"key-a".to_vec()),
             panic_response: AtomicBool::new(false),
             fail_start: AtomicBool::new(false),
@@ -178,31 +188,78 @@ struct Selected {
     fail_start: bool,
 }
 impl Provider for FakeProvider {
-    fn selection_charge(&self, _: &ExchangeSelection) -> Result<usize, AuthError> {
-        Ok(64)
+    fn acquisition_charge(
+        &self,
+        _: &ExchangeSelection,
+        _: &AcquisitionPurpose,
+    ) -> Result<AcquisitionCharge, AuthError> {
+        Ok(AcquisitionCharge {
+            snapshot_bytes: 64,
+            work_bytes: 256,
+        })
     }
-    fn select(
+    fn start_acquire(
         &self,
         _: &CredentialInput,
         selection: &ExchangeSelection,
-    ) -> Result<Arc<dyn SelectedCredential>, AuthError> {
-        Ok(Arc::new(Selected {
-            cleanup: self.cleanup_ready.clone(),
-            respond: self.response_ready.clone(),
-            start: self.start_ready.clone(),
-            starts: self.starts.clone(),
-            key: zeroize::Zeroizing::new(self.key.lock().unwrap().clone()),
-            scope: if selection.source == Source::WindowsLogon {
-                SecurityScope::Connection
-            } else {
-                SecurityScope::Request
-            },
-            panic_response: self.panic_response.load(Ordering::SeqCst),
-            fail_start: self.fail_start.load(Ordering::SeqCst),
+        _: &AcquisitionPurpose,
+        _: SourceControl,
+    ) -> Result<Box<dyn ProviderAcquisition>, AuthError> {
+        self.acquisitions.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(FakeAcquisition {
+            ready: self.acquisition_ready.clone(),
+            cleanup: self.acquisition_cleanup_ready.clone(),
+            selected: Some(Arc::new(Selected {
+                cleanup: self.cleanup_ready.clone(),
+                respond: self.response_ready.clone(),
+                start: self.start_ready.clone(),
+                starts: self.starts.clone(),
+                key: zeroize::Zeroizing::new(self.key.lock().unwrap().clone()),
+                scope: if selection.source == Source::WindowsLogon {
+                    SecurityScope::Connection
+                } else {
+                    SecurityScope::Request
+                },
+                panic_response: self.panic_response.load(Ordering::SeqCst),
+                fail_start: self.fail_start.load(Ordering::SeqCst),
+            })),
         }))
     }
 }
+struct FakeAcquisition {
+    ready: Arc<AtomicBool>,
+    cleanup: Arc<AtomicBool>,
+    selected: Option<Arc<dyn SelectedCredential>>,
+}
+impl ProviderAcquisition for FakeAcquisition {
+    fn poll_acquire(
+        &mut self,
+        _: &mut Context<'_>,
+    ) -> Poll<Result<Arc<dyn SelectedCredential>, AuthError>> {
+        if self.ready.load(Ordering::SeqCst) {
+            Poll::Ready(Ok(self.selected.take().unwrap()))
+        } else {
+            Poll::Pending
+        }
+    }
+    fn poll_close(&mut self, _: &mut Context<'_>, _: bool) -> Poll<Result<(), AuthError>> {
+        if self.cleanup.load(Ordering::SeqCst) {
+            Poll::Ready(Ok(()))
+        } else {
+            Poll::Pending
+        }
+    }
+}
 impl SelectedCredential for Selected {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn same_material(&self, other: &dyn SelectedCredential) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|o| self.key.as_slice() == o.key.as_slice())
+    }
     fn retained_bytes(&self) -> usize {
         self.key.len()
     }
@@ -310,10 +367,22 @@ impl Harness {
         }
         panic!("fake work did not settle");
     }
+    pub fn acquire(
+        &self,
+        operation: &OperationCredentials,
+        selection: ExchangeSelection,
+    ) -> Result<PreparedCredential, AuthError> {
+        let result = self.run(operation.context().acquire(
+            selection,
+            AcquisitionPurpose::BeforeLookup,
+            AuthControl::new(1000),
+        ));
+        self.drive();
+        result
+    }
     pub fn open(&self, operation: &OperationCredentials, generation: u64) -> AuthSession {
-        let opening = operation
-            .context()
-            .select(selection())
+        let opening = self
+            .acquire(operation, selection())
             .unwrap()
             .begin(peer(generation), AuthControl::new(1000));
         match self.run(opening.wait()) {

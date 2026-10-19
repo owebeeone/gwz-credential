@@ -116,56 +116,6 @@ impl Drop for OperationCredentials {
         self.operation.hub.close(Some(&self.operation));
     }
 }
-impl CredentialContext {
-    pub fn select(&self, selection: ExchangeSelection) -> Result<PreparedCredential, SelectError> {
-        selection.validate()?;
-        if !self.operation.input.allowed.contains(&selection) {
-            return Err(AuthError::Unsupported);
-        }
-        let hub = &self.operation.hub;
-        let provider_bytes = hub.provider.selection_charge(&selection)?;
-        let bytes = selection
-            .charge()?
-            .checked_add(provider_bytes)
-            .ok_or(AuthError::InputBudget)?;
-        let reservation = hub
-            .ports
-            .retention
-            .reserve(RetentionCharge { bytes, records: 0 })?;
-        hub.charge(&self.operation, bytes)?;
-        // Selection is source admission only: providers must not start native auth here.
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let provider = hub.provider.select(&self.operation.input, &selection)?;
-            if provider.retained_bytes() > provider_bytes {
-                return Err(AuthError::InputBudget);
-            }
-            Ok(provider)
-        }))
-        .unwrap_or(Err(AuthError::ProviderFault));
-        let provider = match result {
-            Ok(provider) => provider,
-            Err(error) => {
-                let mut authority = lock(&hub.state);
-                lock(&self.operation.state).bytes -= bytes;
-                authority.usage.retained_bytes -= bytes;
-                return Err(error);
-            }
-        };
-        let selected = Arc::new(Selected {
-            operation: self.operation.clone(),
-            choice: selection,
-            provider,
-            bytes,
-            _reservation: reservation,
-        });
-        let valid = {
-            let authority = lock(&hub.state);
-            hub.check(&authority, &self.operation)
-        };
-        valid?;
-        Ok(PreparedCredential { selected })
-    }
-}
 impl PreparedCredential {
     pub fn begin(self, peer: PeerContext, control: AuthControl) -> AuthOpening {
         match self.register(peer, control) {
@@ -181,6 +131,19 @@ impl PreparedCredential {
     }
     fn register(self, peer: PeerContext, control: AuthControl) -> Result<Arc<Child>, AuthError> {
         peer.validate()?;
+        if let Some(source) = &self.selected.source {
+            if source.control.cancellation.is_cancelled() {
+                return Err(AuthError::Cancelled);
+            }
+            if self.selected.operation.hub.ports.clock.now_ms() >= source.control.deadline_ms {
+                return Err(AuthError::Timeout);
+            }
+            if let AcquisitionPurpose::VerifiedRequest { peer: admitted, .. } = &source.purpose
+                && admitted != &peer
+            {
+                return Err(AuthError::PeerMismatch);
+            }
+        }
         let operation = self.selected.operation.clone();
         let hub = operation.hub.clone();
         if peer.endpoint != operation.input.endpoint || peer.target != self.selected.choice.target {
@@ -230,7 +193,9 @@ impl PreparedCredential {
             let valid = hub.check(&authority, &operation);
             if let Err(error) = valid {
                 Err(error)
-            } else if authority.usage.conversations >= hub.config.max_conversations {
+            } else if authority.usage.conversations + authority.usage.acquisitions
+                >= hub.config.max_conversations
+            {
                 Err(AuthError::Capacity)
             } else if let Some(id) = authority.serial.checked_add(1) {
                 authority.serial = id;

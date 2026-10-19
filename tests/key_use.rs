@@ -53,9 +53,7 @@ fn setup(
     let mut actual_peer = peer(10);
     actual_peer.target = explicit().target;
     let session = match h.run(
-        operation
-            .context()
-            .select(explicit())
+        h.acquire(&operation, explicit())
             .unwrap()
             .begin(actual_peer.clone(), AuthControl::new(1000))
             .wait(),

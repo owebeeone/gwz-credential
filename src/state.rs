@@ -23,6 +23,7 @@ pub(crate) struct Authority {
     pub usage: Snapshot,
     pub operations: BTreeMap<u64, Weak<Operation>>,
     pub children: BTreeMap<u64, Weak<Child>>,
+    pub sources: BTreeMap<u64, Weak<crate::acquisition_state::SourceRecord>>,
 }
 pub(crate) struct Operation {
     pub hub: Arc<Hub>,
@@ -48,10 +49,16 @@ pub(crate) struct Selected {
     pub operation: Arc<Operation>,
     pub choice: ExchangeSelection,
     pub provider: Arc<dyn SelectedCredential>,
+    pub source: Option<crate::acquisition_state::SourceAuthority>,
+    // Last field: material/source payload drops before its accounting is released.
+    pub _charge: SelectedCharge,
+}
+pub(crate) struct SelectedCharge {
+    pub operation: Arc<Operation>,
     pub bytes: usize,
     pub _reservation: Box<dyn Reservation>,
 }
-impl Drop for Selected {
+impl Drop for SelectedCharge {
     fn drop(&mut self) {
         let mut authority = lock(&self.operation.hub.state);
         lock(&self.operation.state).bytes -= self.bytes;
@@ -126,12 +133,34 @@ impl Hub {
     pub fn close(&self, operation: Option<&Operation>) {
         let mut wakes = Vec::new();
         let children;
+        let sources;
         {
             let mut authority = lock(&self.state);
             if let Some(operation) = operation {
                 lock(&operation.state).closed = true;
             } else {
                 authority.closed = true;
+            }
+            sources = authority
+                .sources
+                .values()
+                .filter_map(Weak::upgrade)
+                .collect::<Vec<_>>();
+            for source in &sources {
+                if operation.is_none_or(|operation| operation.id == source.operation.id) {
+                    let mut state = lock(&source.state);
+                    source.seal(
+                        &mut state,
+                        if operation.is_some() {
+                            AuthError::OperationClosed
+                        } else {
+                            AuthError::ProviderClosed
+                        },
+                    );
+                    if let Some(waker) = state.waker.take() {
+                        wakes.push(waker);
+                    }
+                }
             }
             children = authority
                 .children
@@ -192,6 +221,16 @@ impl Child {
         }
         if lock(&self.operation.state).closed && !state.terminal {
             return Some(AuthError::OperationClosed);
+        }
+        if (!state.terminal || state.scope_pending)
+            && let Some(source) = state.selected.as_ref().and_then(|s| s.source.as_ref())
+        {
+            if source.control.cancellation.is_cancelled() {
+                return Some(AuthError::Cancelled);
+            }
+            if now >= source.control.deadline_ms {
+                return Some(AuthError::Timeout);
+            }
         }
         if (!state.terminal || state.scope_pending) && self.control.cancellation.is_cancelled() {
             return Some(AuthError::Cancelled);

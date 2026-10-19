@@ -8,7 +8,7 @@ fn selected_before_owner_close_cannot_start_work() {
     let h = Harness::new();
     let (owner, handle) = h.build(CredentialConfig::new(1));
     let operation = handle.prepare(input()).unwrap();
-    let prepared = operation.context().select(selection()).unwrap();
+    let prepared = h.acquire(&operation, selection()).unwrap();
     drop(owner.close());
     assert!(matches!(
         h.run(prepared.begin(peer(1), AuthControl::new(1000)).wait()),
@@ -23,9 +23,8 @@ fn lost_opening_never_publishes_a_late_session() {
     let h = Harness::new();
     let (_owner, handle) = h.build(CredentialConfig::new(2));
     let operation = handle.prepare(input()).unwrap();
-    let opening = operation
-        .context()
-        .select(selection())
+    let opening = h
+        .acquire(&operation, selection())
         .unwrap()
         .begin(peer(1), AuthControl::new(1000));
     h.drive(); // Ready provider, but application has not consumed the opening.

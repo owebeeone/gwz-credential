@@ -20,8 +20,8 @@ impl Drop for Driving<'_> {
 }
 
 impl RetainedWork for Child {
-    fn observation(&self) -> AuthObservation {
-        self.receipt.observation()
+    fn observation(&self) -> WorkObservation {
+        WorkObservation::Authentication(self.receipt.observation())
     }
     fn advance(&self, cx: &mut Context<'_>) -> Poll<()> {
         if self.driving.swap(true, Ordering::AcqRel) {

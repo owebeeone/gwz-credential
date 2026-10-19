@@ -7,6 +7,7 @@ use zeroize::Zeroizing;
 /// Sanitized failure classes; provider diagnostics and secrets are never copied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthError {
+    Source(SourceFailure),
     InvalidInput,
     InputBudget,
     Capacity,
@@ -20,6 +21,18 @@ pub enum AuthError {
     ProviderFault,
     WrongState,
     WouldBlock,
+}
+/// Finite source refusals; never contains native paths or provider diagnostics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceFailure {
+    NotFound,
+    AccessDenied,
+    NonRegular,
+    EmptyOrOversize,
+    InvalidKey,
+    EncryptedKey,
+    UnsupportedKeyForm,
+    Io,
 }
 impl std::fmt::Display for AuthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -145,6 +158,8 @@ pub trait CapturedCaller: std::any::Any + Send + Sync {
 pub struct CredentialInput {
     pub endpoint: String,
     pub caller: Arc<dyn CapturedCaller>,
+    /// Captured executing-endpoint base; never resolved against worker cwd.
+    pub native_base: Option<std::path::PathBuf>,
     pub allowed: Vec<ExchangeSelection>,
 }
 impl CredentialInput {
@@ -157,10 +172,19 @@ impl CredentialInput {
         {
             return Err(AuthError::InvalidInput);
         }
+        if let Some(base) = &self.native_base
+            && (!base.is_absolute()
+                || base.as_os_str().len() > 4096
+                || base.as_os_str().as_encoded_bytes().contains(&0))
+        {
+            return Err(AuthError::InvalidInput);
+        }
+        let base_bytes = self.native_base.as_ref().map_or(0, |p| p.capacity());
         let mut bytes = self
             .endpoint
             .capacity()
             .checked_add(self.caller.retained_bytes())
+            .and_then(|n| n.checked_add(base_bytes))
             .and_then(|n| {
                 n.checked_add(self.allowed.capacity() * std::mem::size_of::<ExchangeSelection>())
             })
@@ -309,5 +333,6 @@ impl CredentialConfig {
 pub struct Snapshot {
     pub operations: usize,
     pub conversations: usize,
+    pub acquisitions: usize,
     pub retained_bytes: usize,
 }

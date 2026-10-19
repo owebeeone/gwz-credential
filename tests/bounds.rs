@@ -17,12 +17,10 @@ fn saturated_records_refuse_before_provider_work_and_survive_host_replacement() 
     h.drive();
     let (_replacement, other) = h.build(CredentialConfig::new(2));
     let b = other.prepare(input()).unwrap();
-    let opening = b
-        .context()
-        .select(selection())
-        .unwrap()
-        .begin(peer(2), AuthControl::new(1000));
-    assert!(matches!(h.run(opening.wait()), Err(AuthError::Capacity)));
+    assert!(matches!(
+        h.acquire(&b, selection()),
+        Err(AuthError::Capacity)
+    ));
     assert_eq!(h.provider.starts.load(Ordering::SeqCst), 1);
     h.provider.cleanup_ready.store(true, Ordering::SeqCst);
     h.drive();

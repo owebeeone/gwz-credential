@@ -96,8 +96,7 @@ fn scope_grant_checks_new_operation_policy_and_revocation_at_commit() {
     a_input.allowed = vec![native.clone()];
     let a = handle.prepare(a_input).unwrap();
     let session = match h.run(
-        a.context()
-            .select(native.clone())
+        h.acquire(&a, native.clone())
             .unwrap()
             .begin(peer(1), AuthControl::new(1000))
             .wait(),

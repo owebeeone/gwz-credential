@@ -1,4 +1,4 @@
-# Portable Credential implementation
+# Credential implementation checkpoints
 
 Status: **accepted portable implementation at
 `d6fc64d6a38457018377020765229405920a4833` after
@@ -95,3 +95,28 @@ The retainer/progress implementation remains an explicit composition obligation.
 Intermediate prompts, superseded reviews and correction plans have moved into
 history unchanged at this stable checkpoint. Their historical references are
 unchanged. The accepted design authorities remain in root at 0de87d56.
+
+## First real source implementation — pending acceptance
+
+The operator expanded scope to correct acquisition, implement one explicit-file
+source and qualify it independently on Mac/Windows/Linux. The joint acquisition
+design at root5dd59da1 passed Code and State after two bounded corrections; see
+CredentialAcquisition-Verdict.md. That accepted design supersedes the earlier
+portable synchronous selection seam. The historical portable acceptance above
+remains evidence for its exact checkpoint, not the current changed source.
+
+Current source implements one directly awaited controlled acquisition returning
+PreparedCredential, separate source observations, shared admission/retained
+cleanup, exact opaque source identity and an endpoint-local explicit file provider.
+The file worker owns its native JoinHandle and result until actual join. Snapshot
+bytes use zeroize1.9.0; bounded container decoding uses base64=0.22.1, the existing
+core version. No dependency was upgraded. No new runtime or general supervisor.
+
+Tests preserve the earlier lifecycle suite and add source caller-loss, completed
+Future cancel/Drop/re-poll, original controls, private-ready fencing, retained
+material/observation accounting, actual blocked/panicking native workers,
+result-before-exit, file replacement, exact line-ending identity, native paths and
+file/container refusal cases. Tests use temporary synthetic source data and fake
+native authentication ports. Native SSH authentication and Connection placement/
+reuse remain unimplemented separate gates. New source acceptance and native
+results will be recorded at the settled implementation gate.

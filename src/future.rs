@@ -212,7 +212,10 @@ pub struct ProviderClosing {
 impl Future for ProviderClosing {
     type Output = ProviderEnd;
     fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<ProviderEnd> {
-        let records = lock(&self.hub.state).usage.conversations;
+        let records = {
+            let state = lock(&self.hub.state);
+            state.usage.conversations + state.usage.acquisitions
+        };
         Poll::Ready(ProviderEnd {
             cleanup: if records == 0 {
                 CleanupStatus::Confirmed
@@ -234,10 +237,17 @@ impl Future for OperationClosing {
             .values()
             .filter_map(std::sync::Weak::upgrade)
             .collect();
-        let records = children
-            .iter()
-            .filter(|c| c.operation.id == self.operation.id)
+        let sources = lock(&self.operation.hub.state)
+            .sources
+            .values()
+            .filter_map(std::sync::Weak::upgrade)
+            .filter(|s| s.operation.id == self.operation.id)
             .count();
+        let records = sources
+            + children
+                .iter()
+                .filter(|c| c.operation.id == self.operation.id)
+                .count();
         Poll::Ready(ProviderEnd {
             cleanup: if records == 0 {
                 CleanupStatus::Confirmed
