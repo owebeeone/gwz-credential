@@ -48,3 +48,21 @@ files, zero wire/protocol changes and zero new production dependencies. No
 production files have been changed. Development-document caps: 75 active files
 per repository and 2,500 lines per document; archive intermediates unchanged at
 stable checkpoints.
+
+## Operator scope amendment and current checkpoint
+
+The operator subsequently directed "So fix the acquisition boundary" and
+identified underspecified requirements. The complete affected Credential
+lifecycle/Connection seam is now re-derived in root
+`dev-docs/GwzCredentialAcquisitionAmendment.md` at c9640db2. Exact acquisition
+clauses in the three root contracts are editable; all application/Connection/
+core/CLI/Python/SSPI sources and existing supervisors remain reference-only.
+Do not preserve a wrong signature merely to minimize the patch. Capture, source
+acquisition, immutable selection, peer auth and reusable scope are distinct;
+explicit-key exact bytes must exist before EVERY pool lookup. Helper/native
+sources preserve valid verified-origin/challenge timing. Production implementation
+is paused pending joint Code/State GO on the WHOLE affected boundary.
+
+Public hosting and native portable qualification are complete separately; see
+CredentialPlatform-Results.md. This does not fulfill the first-real-provider
+implementation deliverable, which resumes only after the amended boundary passes.

@@ -70,3 +70,13 @@ qualification proceed. No real explicit-key provider, key parser, native SSH
 authentication, application integration or placement/reuse qualification is
 claimed. The next bounded step is one reviewed source-admission decision and
 its smallest provider proof; Connection composition remains separate.
+
+## Operator disposition
+
+The operator authorized correcting the acquisition boundary and reconciling the
+requirements before production implementation. The now-pinned Connection §7.1
+requires explicit key reread before EVERY pool lookup; begin-only acquisition
+would read too late. A complete revised lifecycle is DRAFT at root
+`dev-docs/GwzCredentialAcquisitionAmendment.md` (c9640db2), under joint review.
+This question remains the original discovery record, not a veto on that newly
+authorized redesign or a claim that the actual provider outcome is impossible.
